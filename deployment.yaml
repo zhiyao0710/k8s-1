@@ -18,6 +18,14 @@ spec:
         envFrom:
           - secretRef:
               name: db-secret
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: app-data
+
 
 
 

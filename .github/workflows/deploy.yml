@@ -1,78 +1,28 @@
-name: Production CD
+name: Deploy to Production
 
 on:
   push:
-    branches: [ "main" ]
-
-env:
-  # Configuration
-  DEPLOYMENT_NAME: "my-app"
-  CONTAINER_NAME: "my-app-container"
-  NAMESPACE: "production"
-  IMAGE_TAG: ${{ github.sha }}
-  TIMEOUT: "60s" # Short timeout for demo purposes; real-world might be 300s
+    branches: ["main"] # Triggered by the commit from Repo A
 
 jobs:
-  deploy-and-verify:
+  apply-manifests:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout Code
-      - name: Checkout Code
+      - name: Checkout Config Code
         uses: actions/checkout@v4
 
-      # 2. Authenticate with Kubernetes
-      # (Assumes you stored your KUBECONFIG as a GitHub Secret)
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
 
-      - name: Authenticate K8s Context
+      - name: Authenticate K8s
         uses: azure/k8s-set-context@v3
         with:
-          method: kubeconfig
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
 
-      # 3. Simulate Build & Push (Simplified)
-      # In real life, you would build docker image and push to registry here
-      - name: Build and Push Image
+      - name: Apply to Cluster
         run: |
-          echo "Building image my-registry/my-app:${{ env.IMAGE_TAG }}..."
-          # docker build -t my-registry/my-app:${{ env.IMAGE_TAG }} .
-          # docker push my-registry/my-app:${{ env.IMAGE_TAG }}
-
-      # 4. DEPLOY: Update the image
-      - name: Deploy to Kubernetes
-        run: |
-          echo "🚀 Deploying new version: ${{ env.IMAGE_TAG }}"
-          kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} \
-            ${{ env.CONTAINER_NAME }}=my-registry/my-app:${{ env.IMAGE_TAG }} \
-            -n ${{ env.NAMESPACE }}
-
-      # 5. VERIFY: Watch Rollout Status
-      # If this fails, the 'failure()' condition in the next step triggers
-      - name: Verify Rollout Status
-        id: status_check
-        run: |
-          echo "Watching rollout status..."
-          if ! kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} \
-            -n ${{ env.NAMESPACE }} \
-            --timeout=${{ env.TIMEOUT }}; then
-            echo " Rollout failed or timed out!"
-            exit 1
-          fi
-          echo "Rollout completed successfully!"
-
-      # 6. ROLLBACK: Automatic Undo on Failure
-      # Runs ONLY if previous step failed
-      - name:  Rollback Deployment
-        if: failure() && steps.status_check.outcome == 'failure'
-        run: |
-          echo "Initiating automatic rollback..."
-          kubectl rollout undo deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }}
+          kubectl apply -k k8s-1/overlays/prod
           
-          echo "Waiting for rollback to stabilize..."
-          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} --timeout=${{ env.TIMEOUT }}
-          
-          echo "Rollback complete. Production is stable on previous version."
-          exit 1 # Fail the pipeline so developers are notified
+      - name: Verify Rollout
+        run: |
+          kubectl rollout status deployment/mywebapp -n prod --timeout=60s

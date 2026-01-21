@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mywebapp
+  namespace: default
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    name: flask
+    targetPort: 80
+  type: LoadBalancer
